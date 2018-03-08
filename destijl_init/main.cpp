@@ -25,6 +25,7 @@ RT_TASK th_receiveFromMon;
 RT_TASK th_openComRobot;
 RT_TASK th_startRobot;
 RT_TASK th_move;
+RT_TASK th_niveau_batterie;
 
 // Déclaration des priorités des taches
 int PRIORITY_TSERVER = 30;
@@ -33,6 +34,8 @@ int PRIORITY_TMOVE = 10;
 int PRIORITY_TSENDTOMON = 25;
 int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
+int PRIORITY_TNIVEAUBATTERIE= 20;
+
 
 RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
@@ -106,7 +109,8 @@ void initStruct(void) {
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
-    }
+    }// Déclaration des period des taches periodic
+int th_niveau_batterie_period=500;
     if (err = rt_sem_create(&sem_openComRobot, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
@@ -142,6 +146,10 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_create(&th_move, "th_move", 0, PRIORITY_TMOVE, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_niveau_batterie, "th_niveau_batterie", 0, PRIORITY_TNIVEAUBATTERIE, 0)) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -182,10 +190,16 @@ void startTasks() {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_start(&th_niveau_batterie, &f_niveau_batterie, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+   
 }
 
 void deleteTasks() {
     rt_task_delete(&th_server);
     rt_task_delete(&th_openComRobot);
     rt_task_delete(&th_move);
+    rt_task_delete(&th_niveau_batterie);
 }

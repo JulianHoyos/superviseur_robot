@@ -69,7 +69,7 @@ int send_command_to_robot(char cmd, const char * arg)
             reponse = 0;
             break;
         case DMB_GET_VBAT:
-            reponse = 2;
+            reponse = 2; //il faut changer le valeur pour rajouter le vrai valeur de la bat
             break;
         case DMB_IS_BUSY:
             reponse = 1;

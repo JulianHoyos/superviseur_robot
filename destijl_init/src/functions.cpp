@@ -217,6 +217,40 @@ void f_move(void *arg) {
     }
 }
 
+void f_niveau_batterie(void *arg) {
+    /* INIT */
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+
+    /* PERIODIC START */
+#ifdef _WITH_TRACE_
+    printf("%s: start period\n", info.name);
+#endif
+    rt_task_set_periodic(NULL, TM_NOW, 500000000);
+    while (1) {
+#ifdef _WITH_TRACE_
+        printf("%s: Wait period \n", info.name);
+#endif
+        rt_task_wait_period(NULL);
+#ifdef _WITH_TRACE_
+        printf("%s: Periodic activation\n", info.name);
+        printf("%s: move equals %c\n", info.name, move);
+#endif
+       // rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+       // if (robotStarted) {
+           // rt_mutex_acquire(&mutex_move, TM_INFINITE);
+            send_command_to_robot(DMB_GET_VBAT);
+           // rt_mutex_release(&mutex_move);
+#ifdef _WITH_TRACE_
+            printf("%s: the movement %c was sent\n", info.name, move);
+#endif            
+        }
+        //rt_mutex_release(&mutex_robotStarted);
+    }
+}
+
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
     buff = rt_queue_alloc(&q_messageToMon, sizeof (MessageToMon));
