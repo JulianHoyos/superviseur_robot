@@ -94,7 +94,10 @@ void f_receiveFromMon(void *arg) {
                 printf("%s: message start robot\n", info.name);
 #endif 
                 rt_sem_v(&sem_startRobot);
-
+            }else if(msg.data[0] == DMB_START_WITH_WD){
+                
+                rt_sem_v(&sem_startRobot);
+                
             } else if ((msg.data[0] == DMB_GO_BACK)
                     || (msg.data[0] == DMB_GO_FORWARD)
                     || (msg.data[0] == DMB_GO_LEFT)
@@ -219,6 +222,7 @@ void f_move(void *arg) {
 
 void f_niveau_batterie(void *arg) {
     /* INIT */
+    int NiveauBatt=0;
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
@@ -236,20 +240,26 @@ void f_niveau_batterie(void *arg) {
         rt_task_wait_period(NULL);
 #ifdef _WITH_TRACE_
         printf("%s: Periodic activation\n", info.name);
-        printf("%s: move equals %c\n", info.name, move);
 #endif
-       // rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-       // if (robotStarted) {
+        rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+        if (robotStarted) {
            // rt_mutex_acquire(&mutex_move, TM_INFINITE);
-            send_command_to_robot(DMB_GET_VBAT);
+            NiveauBatt=send_command_to_robot(DMB_GET_VBAT);
+            send_message_to_monitor("BAT",&NiveauBatt);
            // rt_mutex_release(&mutex_move);
+            /*MessageToMon msg; 
+            set_msgToMon_header(&msg, HEADER_STM_BAT);
+            set_msgToMon_data(&msg, &NiveauBatt);
+            write_in_queue(&q_messageToMon, msg);*/
 #ifdef _WITH_TRACE_
-            printf("%s: the movement %c was sent\n", info.name, move);
+            printf("%s: the battery %c was sent\n", info.name, move);
 #endif            
         }
-        //rt_mutex_release(&mutex_robotStarted);
+        rt_mutex_release(&mutex_robotStarted);
     }
-}
+        
+    }
+
 
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;

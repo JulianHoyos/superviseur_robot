@@ -34,7 +34,7 @@ int PRIORITY_TMOVE = 10;
 int PRIORITY_TSENDTOMON = 25;
 int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
-int PRIORITY_TNIVEAUBATTERIE= 20;
+int PRIORITY_TNIVEAUBATTERIE= 10;
 
 
 RT_MUTEX mutex_robotStarted;
@@ -55,7 +55,7 @@ int MSG_QUEUE_SIZE = 10;
 int etatCommMoniteur = 1;
 int robotStarted = 0;
 char move = DMB_STOP_MOVE;
-
+//int NiveauBatt=0;
 /**
  * \fn void initStruct(void)
  * \brief Initialisation des structures de l'application (tâches, mutex, 
@@ -110,7 +110,7 @@ void initStruct(void) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }// Déclaration des period des taches periodic
-int th_niveau_batterie_period=500;
+
     if (err = rt_sem_create(&sem_openComRobot, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
@@ -182,10 +182,10 @@ void startTasks() {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
-    if (err = rt_task_start(&th_move, &f_move, NULL)) {
+    /*if (err = rt_task_start(&th_move, &f_move, NULL)) {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
-    }
+    }*/
     if (err = rt_task_start(&th_server, &f_server, NULL)) {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
