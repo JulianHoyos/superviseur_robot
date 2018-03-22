@@ -67,6 +67,7 @@ void f_openComRobot(void * arg);
 void f_move(void *arg);
 void f_startRobot(void *arg);
 void f_niveau_batterie(void *arg); 
+void f_open_camera(void *arg);
 
 #endif /* FUNCTIONS_H */
 

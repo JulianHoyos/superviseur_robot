@@ -26,6 +26,7 @@ RT_TASK th_openComRobot;
 RT_TASK th_startRobot;
 RT_TASK th_move;
 RT_TASK th_niveau_batterie;
+RT_TASK th_open_camera;
 
 // Déclaration des priorités des taches
 int PRIORITY_TSERVER = 30;
@@ -35,7 +36,7 @@ int PRIORITY_TSENDTOMON = 25;
 int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
 int PRIORITY_TNIVEAUBATTERIE= 10;
-
+int PRIORITY_TOPENCAM= 10;
 
 RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
@@ -109,7 +110,7 @@ void initStruct(void) {
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
-    }// Déclaration des period des taches periodic
+    }
 
     if (err = rt_sem_create(&sem_openComRobot, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
@@ -153,6 +154,10 @@ void initStruct(void) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+        if (err = rt_task_create(&th_open_camera, "th_open_camera", 0, PRIORITY_TOPENCAM, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
 
     /* Creation des files de messages */
     if (err = rt_queue_create(&q_messageToMon, "toto", MSG_QUEUE_SIZE * sizeof (MessageToRobot), MSG_QUEUE_SIZE, Q_FIFO)) {
@@ -182,15 +187,19 @@ void startTasks() {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
-    /*if (err = rt_task_start(&th_move, &f_move, NULL)) {
+    if (err = rt_task_start(&th_move, &f_move, NULL)) {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
-    }*/
+    }
     if (err = rt_task_start(&th_server, &f_server, NULL)) {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_niveau_batterie, &f_niveau_batterie, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_start(&th_open_camera, &f_open_camera, NULL)) {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -202,4 +211,5 @@ void deleteTasks() {
     rt_task_delete(&th_openComRobot);
     rt_task_delete(&th_move);
     rt_task_delete(&th_niveau_batterie);
+    rt_task_delete(&th_open_camera);
 }

@@ -129,6 +129,7 @@ int send_message_to_monitor(const char* typeMessage, const void * data) {
         return 0;
     } else {
         return -1;
+        
     }
 }
 

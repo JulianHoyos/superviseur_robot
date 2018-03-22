@@ -112,6 +112,10 @@ void f_receiveFromMon(void *arg) {
 #endif
 
             }
+        }else if (strcmp(msg.header, HEADER_MTS_CAMERA) == 0) {
+            if (msg.data[0] == CAM_OPEN) {
+              //  open_camera(Camera);
+            }
         }
     } while (err > 0);
 
@@ -260,7 +264,9 @@ void f_niveau_batterie(void *arg) {
         
     }
 
-
+void f_open_camera(void *arg){
+    
+}
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
     buff = rt_queue_alloc(&q_messageToMon, sizeof (MessageToMon));
