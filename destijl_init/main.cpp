@@ -26,7 +26,13 @@ RT_TASK th_openComRobot;
 RT_TASK th_startRobot;
 RT_TASK th_move;
 RT_TASK th_niveau_batterie;
+RT_TASK th_startRobotWD;
 RT_TASK th_open_camera;
+RT_TASK th_capture_compute;
+RT_TASK th_det_val_arene;
+
+
+
 
 // Déclaration des priorités des taches
 int PRIORITY_TSERVER = 30;
@@ -35,11 +41,19 @@ int PRIORITY_TMOVE = 10;
 int PRIORITY_TSENDTOMON = 25;
 int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
-int PRIORITY_TNIVEAUBATTERIE= 10;
-int PRIORITY_TOPENCAM= 10;
+int PRIORITY_TNIVEAUBATTERIE= 30;
+int PRIORITY_TOPENCAM= 20;
+int PRIORITY_TCAPTURE_OU_COMPUTE= 28;
+int PRIORITY_TDETECTER_OU_VALIDER= 25;
+int PRIORITY_TSTARTROBOTWD= 10;
 
+
+// Déclaration des mutex
 RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
+RT_MUTEX mutex_etatComRobot;
+RT_MUTEX mutex_compteur;
+
 
 // Déclaration des sémaphores
 RT_SEM sem_barrier;
@@ -55,6 +69,7 @@ int MSG_QUEUE_SIZE = 10;
 // Déclaration des ressources partagées
 int etatCommMoniteur = 1;
 int robotStarted = 0;
+int compteurVerifierCom=0;
 char move = DMB_STOP_MOVE;
 //int NiveauBatt=0;
 /**
@@ -105,7 +120,14 @@ void initStruct(void) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
-
+    if (err = rt_mutex_create(&mutex_etatComRobot, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_compteur, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
     /* Creation du semaphore */
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
@@ -158,6 +180,19 @@ void initStruct(void) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+        if (err = rt_task_create(&th_det_val_arene, "th_det_val_arene", 0, PRIORITY_TDETECTER_OU_VALIDER, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+     if (err = rt_task_create(&th_capture_compute, "th_capture_compute", 0, PRIORITY_TCAPTURE_OU_COMPUTE, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    
+    if (err = rt_task_create(&th_startRobotWD, "th_startRobotWD", 0, PRIORITY_TSTARTROBOTWD, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
 
     /* Creation des files de messages */
     if (err = rt_queue_create(&q_messageToMon, "toto", MSG_QUEUE_SIZE * sizeof (MessageToRobot), MSG_QUEUE_SIZE, Q_FIFO)) {
@@ -203,6 +238,18 @@ void startTasks() {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_start(&th_det_val_arene, &f_det_val_arene, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+     if (err = rt_task_start(&th_capture_compute, &f_capture_compute, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_start(&th_startRobotWD, &f_startRobotWD, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
    
 }
 
@@ -212,4 +259,7 @@ void deleteTasks() {
     rt_task_delete(&th_move);
     rt_task_delete(&th_niveau_batterie);
     rt_task_delete(&th_open_camera);
+    rt_task_delete(&th_det_val_arene);
+    rt_task_delete(&th_capture_compute);
+    rt_task_delete(&th_startRobotWD);
 }

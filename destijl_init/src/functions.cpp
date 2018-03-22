@@ -264,9 +264,22 @@ void f_niveau_batterie(void *arg) {
         
     }
 
+void f_startRobotWD(void *arg){
+    
+}
+
 void f_open_camera(void *arg){
     
 }
+
+void f_det_val_arene(void *arg){
+    
+}
+
+void f_capture_compute(void *arg){
+    
+}
+
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
     buff = rt_queue_alloc(&q_messageToMon, sizeof (MessageToMon));
