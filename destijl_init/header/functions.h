@@ -51,6 +51,8 @@ extern RT_SEM sem_barrier;
 extern RT_SEM sem_openComRobot;
 extern RT_SEM sem_serverOk;
 extern RT_SEM sem_startRobot;
+extern RT_SEM sem_openCamera;
+extern RT_SEM sem_capture_compute;
 
 extern RT_QUEUE q_messageToMon;
 
@@ -58,6 +60,10 @@ extern int etatCommMoniteur;
 extern int robotStarted;
 extern char move;
 extern int compteurVerifierCom;
+extern Camera rpiCam;
+extern Image imgVideo;
+extern Arene monArene;
+extern Jpg compress;
 extern int MSG_QUEUE_SIZE;
 
 extern int PRIORITY_TSERVER;

@@ -43,7 +43,7 @@ int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
 int PRIORITY_TNIVEAUBATTERIE= 30;
 int PRIORITY_TOPENCAM= 20;
-int PRIORITY_TCAPTURE_OU_COMPUTE= 28;
+int PRIORITY_TCAPTURE_OU_COMPUTE= 35;
 int PRIORITY_TDETECTER_OU_VALIDER= 25;
 int PRIORITY_TSTARTROBOTWD= 10;
 
@@ -60,6 +60,8 @@ RT_SEM sem_barrier;
 RT_SEM sem_openComRobot;
 RT_SEM sem_serverOk;
 RT_SEM sem_startRobot;
+RT_SEM sem_openCamera;
+RT_SEM sem_capture_compute;
 
 // Déclaration des files de message
 RT_QUEUE q_messageToMon;
@@ -67,6 +69,11 @@ RT_QUEUE q_messageToMon;
 int MSG_QUEUE_SIZE = 10;
 
 // Déclaration des ressources partagées
+Camera rpiCam;
+Image imgVideo;
+Arene monArene;
+Jpg compress;
+
 int etatCommMoniteur = 1;
 int robotStarted = 0;
 int compteurVerifierCom=0;
@@ -143,6 +150,14 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_sem_create(&sem_startRobot, NULL, 0, S_FIFO)) {
+        printf("Error semaphore create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_sem_create(&sem_openCamera, NULL, 0, S_FIFO)) {
+        printf("Error semaphore create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_sem_create(&sem_capture_compute, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }

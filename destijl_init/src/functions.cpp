@@ -2,6 +2,7 @@
 
 char mode_start;
 
+
 void write_in_queue(RT_QUEUE *, MessageToMon);
 
 void f_server(void *arg) {
@@ -114,7 +115,19 @@ void f_receiveFromMon(void *arg) {
             }
         }else if (strcmp(msg.header, HEADER_MTS_CAMERA) == 0) {
             if (msg.data[0] == CAM_OPEN) {
-              //  open_camera(Camera);
+              rt_sem_v(&sem_openCamera);
+            }else if(msg.data[0] == CAM_CLOSE){
+              
+            }else if(msg.data[0] == CAM_ASK_ARENA){
+              
+            }else if(msg.data[0] == CAM_ARENA_CONFIRM){
+              
+            }else if(msg.data[0] == CAM_ARENA_INFIRM){
+              
+            }else if (msg.data[0] == CAM_COMPUTE_POSITION){
+              
+            }else if(msg.data[0] == CAM_STOP_COMPUTE_POSITION){
+              
             }
         }
     } while (err > 0);
@@ -269,16 +282,77 @@ void f_startRobotWD(void *arg){
 }
 
 void f_open_camera(void *arg){
+    int err;    
+    /* INIT */
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+
+    while (1) {
+#ifdef _WITH_TRACE_
+        printf("%s : Wait sem_openComRobot\n", info.name);
+#endif
+        rt_sem_p(&sem_openCamera, TM_INFINITE);
+#ifdef _WITH_TRACE_
+        printf("%s : sem_openCamera => open camera \n", info.name);
+#endif
+        err = open_camera(&rpiCam);
+        if (err == 0) {
+#ifdef _WITH_TRACE_
+            printf("%s : the communication is opened\n", info.name);
+#endif
+            MessageToMon msg;
+            set_msgToMon_header(&msg, HEADER_STM_ACK);
+            write_in_queue(&q_messageToMon, msg);
+            rt_sem_v(&sem_capture_compute);
+        } else {
+            MessageToMon msg;
+            set_msgToMon_header(&msg, HEADER_STM_NO_ACK);
+            write_in_queue(&q_messageToMon, msg);
+        }
+    }
+}
+void f_capture_compute(void *arg){
+    MessageToMon msg;
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    //rt_sem_p(&sem_barrier, TM_INFINITE);
+    rt_sem_p(&sem_capture_compute, TM_INFINITE);
     
+    /* PERIODIC START */
+#ifdef _WITH_TRACE_
+    printf("%s: start period\n", info.name);
+#endif
+    rt_task_set_periodic(NULL, TM_NOW, 100000000);
+    while (1) {
+#ifdef _WITH_TRACE_
+        printf("%s: Wait period \n", info.name);
+#endif
+        rt_task_wait_period(NULL);
+#ifdef _WITH_TRACE_
+        printf("%s: Periodic activation\n", info.name);
+#endif
+            get_image(&rpiCam,&imgVideo);
+            compress_image(&imgVideo,&compress);
+            send_message_to_monitor("IMG",&compress);
+            /*set_msgToMon_header(&msg, "IMG");
+            set_msgToMon_data(&msg, &compress);
+            write_in_queue(&q_messageToMon, msg);*/
+            
+#ifdef _WITH_TRACE_
+            printf("%s: send images %c was sent\n", info.name, move);
+#endif            
+       
+    }
 }
 
 void f_det_val_arene(void *arg){
     
 }
 
-void f_capture_compute(void *arg){
-    
-}
+
 
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
