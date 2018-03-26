@@ -41,10 +41,10 @@ int PRIORITY_TMOVE = 10;
 int PRIORITY_TSENDTOMON = 25;
 int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
-int PRIORITY_TNIVEAUBATTERIE= 30;
+int PRIORITY_TNIVEAUBATTERIE= 40;
 int PRIORITY_TOPENCAM= 20;
 int PRIORITY_TCAPTURE_OU_COMPUTE= 35;
-int PRIORITY_TDETECTER_OU_VALIDER= 25;
+int PRIORITY_TDETECTER_OU_VALIDER= 50;
 int PRIORITY_TSTARTROBOTWD= 10;
 
 
@@ -53,6 +53,9 @@ RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
 RT_MUTEX mutex_etatComRobot;
 RT_MUTEX mutex_compteur;
+RT_MUTEX mutex_modeCamera;
+RT_MUTEX mutex_monArene;
+RT_MUTEX mutex_etatImage;
 
 
 // Déclaration des sémaphores
@@ -62,6 +65,8 @@ RT_SEM sem_serverOk;
 RT_SEM sem_startRobot;
 RT_SEM sem_openCamera;
 RT_SEM sem_capture_compute;
+RT_SEM sem_det_val_arene;
+
 
 // Déclaration des files de message
 RT_QUEUE q_messageToMon;
@@ -74,6 +79,8 @@ Image imgVideo;
 Arene monArene;
 Jpg compress;
 
+int etatImage=0;//1-Image en traitement / 0- Image traitée 
+char modeCamera=CAM_IDLE;
 int etatCommMoniteur = 1;
 int robotStarted = 0;
 int compteurVerifierCom=0;
@@ -135,6 +142,18 @@ void initStruct(void) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+    if (err = rt_mutex_create(&mutex_modeCamera, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_monArene, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_etatImage, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
     /* Creation du semaphore */
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
@@ -161,7 +180,10 @@ void initStruct(void) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
-
+    if (err = rt_sem_create(&sem_det_val_arene, NULL, 0, S_FIFO)) {
+        printf("Error semaphore create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
     /* Creation des taches */
     if (err = rt_task_create(&th_server, "th_server", 0, PRIORITY_TSERVER, 0)) {
         printf("Error task create: %s\n", strerror(-err));

@@ -114,21 +114,25 @@ void f_receiveFromMon(void *arg) {
 
             }
         }else if (strcmp(msg.header, HEADER_MTS_CAMERA) == 0) {
+            rt_mutex_acquire(&mutex_modeCamera, TM_INFINITE);
             if (msg.data[0] == CAM_OPEN) {
+              modeCamera=CAM_CAPTURE;
               rt_sem_v(&sem_openCamera);
             }else if(msg.data[0] == CAM_CLOSE){
-              
+              close_camera(&rpiCam);
             }else if(msg.data[0] == CAM_ASK_ARENA){
-              
+                modeCamera=CAM_IDLE;
+                rt_sem_v(&sem_det_val_arene);
             }else if(msg.data[0] == CAM_ARENA_CONFIRM){
-              
+                modeCamera=CAM_CAPTURE;                
             }else if(msg.data[0] == CAM_ARENA_INFIRM){
-              
+                modeCamera=CAM_CAPTURE;                
             }else if (msg.data[0] == CAM_COMPUTE_POSITION){
-              
+                modeCamera=CAM_COMPUTE_POSITION;
             }else if(msg.data[0] == CAM_STOP_COMPUTE_POSITION){
-              
+                modeCamera=CAM_CAPTURE;
             }
+            rt_mutex_release(&mutex_modeCamera);
         }
     } while (err > 0);
 
@@ -211,19 +215,19 @@ void f_move(void *arg) {
     rt_sem_p(&sem_barrier, TM_INFINITE);
 
     /* PERIODIC START */
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
     printf("%s: start period\n", info.name);
-#endif
+#endif*/
     rt_task_set_periodic(NULL, TM_NOW, 100000000);
     while (1) {
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
         printf("%s: Wait period \n", info.name);
-#endif
+#endif*/
         rt_task_wait_period(NULL);
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
         printf("%s: Periodic activation\n", info.name);
         printf("%s: move equals %c\n", info.name, move);
-#endif
+#endif*/
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         if (robotStarted) {
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
@@ -246,18 +250,18 @@ void f_niveau_batterie(void *arg) {
     rt_sem_p(&sem_barrier, TM_INFINITE);
 
     /* PERIODIC START */
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
     printf("%s: start period\n", info.name);
-#endif
+#endif*/
     rt_task_set_periodic(NULL, TM_NOW, 500000000);
     while (1) {
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
         printf("%s: Wait period \n", info.name);
-#endif
+#endif*/
         rt_task_wait_period(NULL);
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
         printf("%s: Periodic activation\n", info.name);
-#endif
+#endif*/
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         if (robotStarted) {
            // rt_mutex_acquire(&mutex_move, TM_INFINITE);
@@ -315,6 +319,8 @@ void f_open_camera(void *arg){
 }
 void f_capture_compute(void *arg){
     MessageToMon msg;
+    Position robotPosition[20];
+    int posOK=0;
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
@@ -327,28 +333,90 @@ void f_capture_compute(void *arg){
 #endif
     rt_task_set_periodic(NULL, TM_NOW, 100000000);
     while (1) {
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
         printf("%s: Wait period \n", info.name);
-#endif
+#endif*/
         rt_task_wait_period(NULL);
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
         printf("%s: Periodic activation\n", info.name);
-#endif
+#endif*/
+        rt_mutex_acquire(&mutex_etatImage, TM_INFINITE);
+        etatImage=1;
+        rt_mutex_release(&mutex_etatImage); 
+        
+        rt_mutex_acquire(&mutex_modeCamera, TM_INFINITE);
+        if(modeCamera==CAM_CAPTURE){            
             get_image(&rpiCam,&imgVideo);
             compress_image(&imgVideo,&compress);
             send_message_to_monitor("IMG",&compress);
             /*set_msgToMon_header(&msg, "IMG");
             set_msgToMon_data(&msg, &compress);
             write_in_queue(&q_messageToMon, msg);*/
+         }else if(modeCamera==CAM_COMPUTE_POSITION){
+             get_image(&rpiCam,&imgVideo);
+             posOK=detect_position(&imgVideo,robotPosition,&monArene);
+             if(posOK==0){
+                send_message_to_monitor("POS",&robotPosition[0]);
+             }else{
+                 draw_position(&imgVideo,&imgVideo,&robotPosition[0]);
+                 send_message_to_monitor("POS",&robotPosition[0]);
+                 
+            }
+             compress_image(&imgVideo,&compress);
+             send_message_to_monitor("IMG",&compress);
+         }else if(modeCamera==CAM_IDLE){
+             
+         }
             
-#ifdef _WITH_TRACE_
-            printf("%s: send images %c was sent\n", info.name, move);
-#endif            
+        
+/*#ifdef _WITH_TRACE_
+            printf("%s: send images %c was sent\n", info.name, modeCamera);
+#endif   */
+        rt_mutex_release(&mutex_modeCamera); 
+        
+        rt_mutex_acquire(&mutex_etatImage, TM_INFINITE);
+        etatImage=0;
+        rt_mutex_release(&mutex_etatImage); 
        
     }
 }
 
 void f_det_val_arene(void *arg){
+   MessageToMon msg;
+    /* INIT */
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+
+    while (1) {
+#ifdef _WITH_TRACE_
+        printf("%s : Wait sem_openComRobot\n", info.name);
+#endif
+        rt_sem_p(&sem_det_val_arene, TM_INFINITE);
+#ifdef _WITH_TRACE_
+        printf("%s : sem_openCamera => open camera \n", info.name);
+#endif
+       rt_mutex_acquire(&mutex_etatImage, TM_INFINITE);
+        if(etatImage==0){
+                get_image(&rpiCam,&imgVideo);
+           if(detect_arena(&imgVideo,&monArene)==0){
+                detect_arena(&imgVideo,&monArene);
+                draw_arena(&imgVideo,&imgVideo,&monArene);
+                compress_image(&imgVideo,&compress);
+                send_message_to_monitor("IMG",&compress);
+                set_msgToMon_header(&msg, HEADER_STM_ACK);
+                write_in_queue(&q_messageToMon, msg);
+          }else{                
+                set_msgToMon_header(&msg, HEADER_STM_NO_ACK);
+                write_in_queue(&q_messageToMon, msg);
+           }
+       
+         }
+        rt_mutex_release(&mutex_etatImage);
+        
+        
+}
     
 }
 

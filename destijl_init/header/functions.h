@@ -46,6 +46,9 @@ extern RT_MUTEX mutex_robotStarted;
 extern RT_MUTEX mutex_move;
 extern RT_MUTEX mutex_etatComRobot;
 extern RT_MUTEX mutex_compteur;
+extern RT_MUTEX mutex_modeCamera;
+extern RT_MUTEX mutex_monArene;
+extern RT_MUTEX mutex_etatImage;
 
 extern RT_SEM sem_barrier;
 extern RT_SEM sem_openComRobot;
@@ -53,13 +56,17 @@ extern RT_SEM sem_serverOk;
 extern RT_SEM sem_startRobot;
 extern RT_SEM sem_openCamera;
 extern RT_SEM sem_capture_compute;
+extern RT_SEM sem_det_val_arene;
 
 extern RT_QUEUE q_messageToMon;
 
 extern int etatCommMoniteur;
 extern int robotStarted;
+extern int etatImage;
 extern char move;
+extern char modeCamera;
 extern int compteurVerifierCom;
+
 extern Camera rpiCam;
 extern Image imgVideo;
 extern Arene monArene;

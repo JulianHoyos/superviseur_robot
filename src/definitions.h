@@ -32,6 +32,7 @@
 #define DMB_GO_RIGHT            'R'
 #define DMB_STOP_MOVE           'S'
 
+
 #define ROBOT_TIMED_OUT -3
 #define ROBOT_UKNOWN_CMD -2
 #define ROBOT_ERROR  -1
@@ -45,6 +46,8 @@
 #define CAM_ARENA_INFIRM            'z'
 #define CAM_COMPUTE_POSITION        'p'
 #define CAM_STOP_COMPUTE_POSITION   's'
+#define CAM_IDLE                    'Z'
+#define CAM_CAPTURE                 'd'
 
 #define DMB_BAT_LOW 0
 #define DMB_BAT_MEDIUM 1
