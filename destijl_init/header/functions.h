@@ -49,6 +49,8 @@ extern RT_MUTEX mutex_compteur;
 extern RT_MUTEX mutex_modeCamera;
 extern RT_MUTEX mutex_monArene;
 extern RT_MUTEX mutex_etatImage;
+extern RT_MUTEX mutex_AreneSaved;
+extern RT_MUTEX mutex_etatCommMoniteur;
 
 extern RT_SEM sem_barrier;
 extern RT_SEM sem_openComRobot;
@@ -70,6 +72,7 @@ extern int compteurVerifierCom;
 extern Camera rpiCam;
 extern Image imgVideo;
 extern Arene monArene;
+extern Arene AreneSaved;
 extern Jpg compress;
 extern int MSG_QUEUE_SIZE;
 

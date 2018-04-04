@@ -52,11 +52,12 @@ int PRIORITY_TSTARTROBOTWD= 10;
 RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
 RT_MUTEX mutex_etatComRobot;
+RT_MUTEX mutex_etatCommMoniteur;
 RT_MUTEX mutex_compteur;
 RT_MUTEX mutex_modeCamera;
 RT_MUTEX mutex_monArene;
 RT_MUTEX mutex_etatImage;
-
+RT_MUTEX mutex_AreneSaved;
 
 // Déclaration des sémaphores
 RT_SEM sem_barrier;
@@ -76,12 +77,13 @@ int MSG_QUEUE_SIZE = 10;
 // Déclaration des ressources partagées
 Camera rpiCam;
 Image imgVideo;
+Arene AreneSaved;
 Arene monArene;
 Jpg compress;
 
 int etatImage=0;//1-Image en traitement / 0- Image traitée 
 char modeCamera=CAM_IDLE;
-int etatCommMoniteur = 1;
+int etatCommMoniteur = 1;//1-Comm OK / 0-Comm perdu
 int robotStarted = 0;
 int compteurVerifierCom=0;
 char move = DMB_STOP_MOVE;
@@ -154,6 +156,14 @@ void initStruct(void) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+     if (err = rt_mutex_create(&mutex_AreneSaved, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+     if (err = rt_mutex_create(&mutex_etatCommMoniteur, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }      
     /* Creation du semaphore */
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));

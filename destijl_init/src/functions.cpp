@@ -5,6 +5,19 @@ char mode_start;
 
 void write_in_queue(RT_QUEUE *, MessageToMon);
 
+int compteur(int erreur){
+   rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+    if(robotStarted){
+        if(erreur=ROBOT_TIMED_OUT){
+            compteurVerifierCom++;
+        }else{
+            compteurVerifierCom=0;
+        }
+      if(compteurVerifierCom>=3)
+      return compteurVerifierCom; }
+  rt_mutex_release(&mutex_robotStarted);
+}
+
 void f_server(void *arg) {
     int err;
     /* INIT */
@@ -55,7 +68,11 @@ void f_sendToMon(void * arg) {
             free_msgToMon_data(&msg);
             rt_queue_free(&q_messageToMon, &msg);
         } else {
-            printf("Error msg queue write: %s\n", strerror(-err));
+            printf("La communication Serveur-Superviseur a été perdue: %s\n", strerror(-err));
+              rt_mutex_acquire(&mutex_etatCommMoniteur, TM_INFINITE);
+                      etatCommMoniteur = 0;
+              rt_mutex_release(&mutex_etatCommMoniteur);
+
         }
     }
 }
@@ -78,7 +95,14 @@ void f_receiveFromMon(void *arg) {
 #ifdef _WITH_TRACE_
         printf("%s : waiting for a message from monitor\n", info.name);
 #endif
-        err = receive_message_from_monitor(msg.header, msg.data);
+        err = receive_message_from_monitor(msg.header, msg.data);//Validation du connection serveur-Superviseur
+        if(err<=0){
+            printf("La communication Serveur-Superviseur a été perdue: %s\n", strerror(-err));
+              rt_mutex_acquire(&mutex_etatCommMoniteur, TM_INFINITE);
+                      etatCommMoniteur = 0;
+              rt_mutex_release(&mutex_etatCommMoniteur);
+              break;
+        }
 #ifdef _WITH_TRACE_
         printf("%s: msg {header:%s,data=%s} received from UI\n", info.name, msg.header, msg.data);
 #endif
@@ -124,7 +148,10 @@ void f_receiveFromMon(void *arg) {
                 modeCamera=CAM_IDLE;
                 rt_sem_v(&sem_det_val_arene);
             }else if(msg.data[0] == CAM_ARENA_CONFIRM){
-                modeCamera=CAM_CAPTURE;                
+                rt_mutex_acquire(&mutex_AreneSaved, TM_INFINITE);
+                AreneSaved=monArene;
+                rt_mutex_release(&mutex_AreneSaved);
+                modeCamera=CAM_CAPTURE;
             }else if(msg.data[0] == CAM_ARENA_INFIRM){
                 modeCamera=CAM_CAPTURE;                
             }else if (msg.data[0] == CAM_COMPUTE_POSITION){
@@ -353,8 +380,10 @@ void f_capture_compute(void *arg){
             set_msgToMon_data(&msg, &compress);
             write_in_queue(&q_messageToMon, msg);*/
          }else if(modeCamera==CAM_COMPUTE_POSITION){
-             get_image(&rpiCam,&imgVideo);
-             posOK=detect_position(&imgVideo,robotPosition,&monArene);
+                get_image(&rpiCam,&imgVideo);
+                rt_mutex_acquire(&mutex_AreneSaved, TM_INFINITE);                                
+                posOK=detect_position(&imgVideo,robotPosition,&monArene);
+                rt_mutex_release(&mutex_AreneSaved);
              if(posOK==0){
                 send_message_to_monitor("POS",&robotPosition[0]);
              }else{
@@ -366,9 +395,7 @@ void f_capture_compute(void *arg){
              send_message_to_monitor("IMG",&compress);
          }else if(modeCamera==CAM_IDLE){
              
-         }
-            
-        
+         }       
 /*#ifdef _WITH_TRACE_
             printf("%s: send images %c was sent\n", info.name, modeCamera);
 #endif   */
