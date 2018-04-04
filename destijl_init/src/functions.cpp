@@ -5,25 +5,28 @@ char mode_start;
 
 void write_in_queue(RT_QUEUE *, MessageToMon);
 
-int compteur(int erreur){
-   rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-    if(robotStarted){
-        if(erreur=ROBOT_TIMED_OUT){
+void compteur(int erreur){
+   rt_mutex_acquire(&mutex_compteurVerifierCom, TM_INFINITE);
+        if(erreur==ROBOT_TIMED_OUT){
             compteurVerifierCom++;
         }else{
             compteurVerifierCom=0;
         }
-      if(compteurVerifierCom>=3)
-      return compteurVerifierCom; }
-  rt_mutex_release(&mutex_robotStarted);
+      if(compteurVerifierCom>=3){
+          printf("Communication robot-superviseur perdue: %s\n");
+          send_message_to_monitor(HEADER_STM_LOST_DMB);
+          close_communication_robot();
+
+      }
+  rt_mutex_release(&mutex_compteurVerifierCom);
 }
 
 void f_server(void *arg) {
     int err;
     /* INIT */
     RT_TASK_INFO info;
-    rt_task_inquire(NULL, &info);
-    printf("Init %s\n", info.name);
+    rt_task_inquire(NULL, &info); 
+   printf("Init %s\n", info.name);
     rt_sem_p(&sem_barrier, TM_INFINITE);
 
     err = run_nodejs("/usr/local/bin/node", "/home/pi/Interface_Robot/server.js");
@@ -234,8 +237,78 @@ void f_startRobot(void * arg) {
     }
 }
 
+
+void f_startRobotWD(void *arg){
+    int err;
+RT_TASK_INFO info;
+
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+
+    rt_task_set_periodic(NULL, TM_NOW, 100000000);
+    
+    while (1) {
+#ifdef _WITH_TRACE_
+        printf("%s : Wait sem_startRoboWD\n", info.name);
+#endif
+        if(robotStarted==1){
+            rt_sem_p(&sem_startRobot, TM_INFINITE);
+    #ifdef _WITH_TRACE_
+            printf("%s : sem_startRobotWD arrived => Start robot avec WD\n", info.name);
+    #endif
+            err = send_command_to_robot(DMB_START_WITH_WD);
+            if (err == 0) {  // s'il y a un erreur
+    #ifdef _WITH_TRACE_
+                printf("%s : the robot is started\n", info.name);
+    #endif
+                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+                robotStarted = 1;
+                rt_mutex_release(&mutex_robotStarted);
+                MessageToMon msg;
+                set_msgToMon_header(&msg, HEADER_STM_ACK);
+                write_in_queue(&q_messageToMon, msg);
+            } else {
+                MessageToMon msg;
+                set_msgToMon_header(&msg, HEADER_STM_NO_ACK);
+                write_in_queue(&q_messageToMon, msg);
+            }
+        
+        }
+        else {
+            err= send_command_to_robot(DMB_RELOAD_WD);
+            rt_mutex_release(&mutex_compteur);
+            if(err= ROBOT_TIMED_OUT){  //verifie quelle est le valeur retourne
+                if(compteurVerifierCom >2){
+                    send_message_to_monitor("LCD","Comm avec Robo est perdu");  
+                    //envoye LOST DMB
+                    close_communication_robot();
+                    // initialise la communication a etat final ??
+                }
+                else {
+                    compteurVerifierCom++;
+                }  
+            }else {
+                compteurVerifierCom=0;   
+            }
+            
+        }
+        
+        
+        
+    }
+
+
+}
+
+
+
+
+
+
 void f_move(void *arg) {
     /* INIT */
+    int err=0;
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
@@ -258,11 +331,12 @@ void f_move(void *arg) {
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         if (robotStarted) {
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
-            send_command_to_robot(move);
+            err=send_command_to_robot(move);
+            compteur(err);
             rt_mutex_release(&mutex_move);
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
             printf("%s: the movement %c was sent\n", info.name, move);
-#endif            
+#endif*/            
         }
         rt_mutex_release(&mutex_robotStarted);
     }
@@ -293,24 +367,22 @@ void f_niveau_batterie(void *arg) {
         if (robotStarted) {
            // rt_mutex_acquire(&mutex_move, TM_INFINITE);
             NiveauBatt=send_command_to_robot(DMB_GET_VBAT);
+            compteur(NiveauBatt);
             send_message_to_monitor("BAT",&NiveauBatt);
            // rt_mutex_release(&mutex_move);
             /*MessageToMon msg; 
             set_msgToMon_header(&msg, HEADER_STM_BAT);
             set_msgToMon_data(&msg, &NiveauBatt);
             write_in_queue(&q_messageToMon, msg);*/
-#ifdef _WITH_TRACE_
+/*#ifdef _WITH_TRACE_
             printf("%s: the battery %c was sent\n", info.name, move);
-#endif            
+#endif */           
         }
         rt_mutex_release(&mutex_robotStarted);
     }
         
     }
 
-void f_startRobotWD(void *arg){
-    
-}
 
 void f_open_camera(void *arg){
     int err;    

@@ -53,6 +53,7 @@ RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
 RT_MUTEX mutex_etatComRobot;
 RT_MUTEX mutex_etatCommMoniteur;
+RT_MUTEX mutex_compteurVerifierCom;
 RT_MUTEX mutex_compteur;
 RT_MUTEX mutex_modeCamera;
 RT_MUTEX mutex_monArene;
@@ -163,7 +164,11 @@ void initStruct(void) {
      if (err = rt_mutex_create(&mutex_etatCommMoniteur, NULL)) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
-    }      
+    }
+     if (err = rt_mutex_create(&mutex_compteurVerifierCom, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    } 
     /* Creation du semaphore */
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));

@@ -51,6 +51,8 @@ extern RT_MUTEX mutex_monArene;
 extern RT_MUTEX mutex_etatImage;
 extern RT_MUTEX mutex_AreneSaved;
 extern RT_MUTEX mutex_etatCommMoniteur;
+extern RT_MUTEX mutex_compteurVerifierCom;
+
 
 extern RT_SEM sem_barrier;
 extern RT_SEM sem_openComRobot;
@@ -100,5 +102,6 @@ void f_startRobotWD(void *arg);
 void f_open_camera(void *arg);
 void f_det_val_arene(void *arg);
 void f_capture_compute(void *arg);
+void compteur(int erreur);
 #endif /* FUNCTIONS_H */
 
