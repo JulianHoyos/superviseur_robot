@@ -87,6 +87,7 @@ char modeCamera=CAM_IDLE;
 int etatCommMoniteur = 1;//1-Comm OK / 0-Comm perdu
 int robotStarted = 0;
 int compteurVerifierCom=0;
+init compteurWD=0:
 char move = DMB_STOP_MOVE;
 //int NiveauBatt=0;
 /**
