@@ -5,22 +5,28 @@ char mode_start;
 
 void write_in_queue(RT_QUEUE *, MessageToMon);
 
-void compteur(int erreur){
-   MessageToMon msg;
-   rt_mutex_acquire(&mutex_compteurVerifierCom, TM_INFINITE);
-        if(erreur==ROBOT_TIMED_OUT){
-            compteurVerifierCom++;
-        }else{
-            compteurVerifierCom=0;
-        }
-      if(compteurVerifierCom>=3){
-          set_msgToMon_header(&msg, HEADER_STM_LOST_DMB);
-          write_in_queue(&q_messageToMon, msg);
-          printf("Communication robot-superviseur perdue: %s\n");
-          close_communication_robot();
 
+//Fonction qui est chargée de gérer le compteur pour vérifier une vraie perte de communication
+void compteur(int erreur){   
+   MessageToMon msg;
+   //Meme si compteurVerifierCom est une donnée partagée, on utilise pas un mutex, parce que
+   //la fonction compteur est appelée à l'interieur du mutex de robotStarted
+   if(compteurVerifierCom!=-1){
+     if(compteurVerifierCom==3){
+         send_message_to_monitor(HEADER_STM_LOST_DMB);
+          printf("Compteur Com: %d \n",compteurVerifierCom,  "\n");
+          printf("Communication robot-superviseur perdue: %s \n");
+          compteurVerifierCom=-1;
+          close_communication_robot();
+      }else {          
+            if(erreur==ROBOT_TIMED_OUT){
+                
+                 compteurVerifierCom++;
+            }else{
+                 compteurVerifierCom=0;
+                 }
       }
-  rt_mutex_release(&mutex_compteurVerifierCom);
+   }
 }
 
 void f_server(void *arg) {
@@ -41,7 +47,8 @@ void f_server(void *arg) {
         printf("%s: nodejs started\n", info.name);
 #endif
         open_server();
-        rt_sem_broadcast(&sem_serverOk);
+ 
+        rt_sem_broadcast(&sem_serverOk);//Déverrouiller toutes le taches du sémaphore
     }
 }
 
@@ -68,15 +75,16 @@ void f_sendToMon(void * arg) {
 #ifdef _WITH_TRACE_
             printf("%s : message {%s,%s} in queue\n", info.name, msg.header, msg.data);
 #endif
-
-            send_message_to_monitor(msg.header, msg.data);
-            free_msgToMon_data(&msg);
-            rt_queue_free(&q_messageToMon, &msg);
-        } else {
-            printf("La communication Serveur-Superviseur a été perdue: %s\n", strerror(-err));
-              rt_mutex_acquire(&mutex_etatCommMoniteur, TM_INFINITE);
-                      etatCommMoniteur = 0;
-              rt_mutex_release(&mutex_etatCommMoniteur);
+             //Vérifier que le message a été envoyé correctement
+            err=send_message_to_monitor(msg.header, msg.data);       
+            if(err<0){
+                 printf("La communication Serveur-Superviseur a été perdue (SEND FAIL 1): %s\n", strerror(-err));                 
+                 rt_sem_v(&sem_Reset);                     
+             }         
+            
+                free_msgToMon_data(&msg);
+                rt_queue_free(&q_messageToMon, &msg);
+            
 
         }
     }
@@ -100,17 +108,20 @@ void f_receiveFromMon(void *arg) {
 #ifdef _WITH_TRACE_
         printf("%s : waiting for a message from monitor\n", info.name);
 #endif
+        //Vérifier que le message a été reçu correctement
         err = receive_message_from_monitor(msg.header, msg.data);//Validation du connection serveur-Superviseur
         if(err<=0){
-            printf("La communication Serveur-Superviseur a été perdue: %s\n", strerror(-err));
-              rt_mutex_acquire(&mutex_etatCommMoniteur, TM_INFINITE);
-                      etatCommMoniteur = 0;
-              rt_mutex_release(&mutex_etatCommMoniteur);
+            printf("La communication Serveur-Superviseur a été perdue (RECEIVE FAIL): %s\n", strerror(-err));
+              rt_sem_v(&sem_Reset);
               break;
-        }
+        }else{
 #ifdef _WITH_TRACE_
         printf("%s: msg {header:%s,data=%s} received from UI\n", info.name, msg.header, msg.data);
 #endif
+        
+        
+ //---------------Identification du header du message et la demande de l'usager----------------------
+        //Gestion de la communication supervisor-robot
         if (strcmp(msg.header, HEADER_MTS_COM_DMB) == 0) {
             if (msg.data[0] == OPEN_COM_DMB) { // Open communication supervisor-robot
 #ifdef _WITH_TRACE_
@@ -118,6 +129,8 @@ void f_receiveFromMon(void *arg) {
 #endif
                 rt_sem_v(&sem_openComRobot);
             }
+            
+         //Demarrage du robot   
         } else if (strcmp(msg.header, HEADER_MTS_DMB_ORDER) == 0) {
             if (msg.data[0] == DMB_START_WITHOUT_WD) { // Start robot
 #ifdef _WITH_TRACE_
@@ -126,7 +139,7 @@ void f_receiveFromMon(void *arg) {
                 rt_sem_v(&sem_startRobot);
             }else if(msg.data[0] == DMB_START_WITH_WD){
                 
-                rt_sem_v(&sem_startRobot);
+                rt_sem_v(&sem_startRobotWD);
                 
             } else if ((msg.data[0] == DMB_GO_BACK)
                     || (msg.data[0] == DMB_GO_FORWARD)
@@ -142,16 +155,19 @@ void f_receiveFromMon(void *arg) {
 #endif
 
             }
+        
+        //Fonctionnalités de la camera
         }else if (strcmp(msg.header, HEADER_MTS_CAMERA) == 0) {
+            
             rt_mutex_acquire(&mutex_modeCamera, TM_INFINITE);
             if (msg.data[0] == CAM_OPEN) {
               modeCamera=CAM_CAPTURE;
-              rt_sem_v(&sem_openCamera);
+              rt_sem_v(&sem_openCamera);//éxecuter la tache th_open_camera
             }else if(msg.data[0] == CAM_CLOSE){
               close_camera(&rpiCam);
             }else if(msg.data[0] == CAM_ASK_ARENA){
                 modeCamera=CAM_IDLE;
-                rt_sem_v(&sem_det_val_arene);
+                rt_sem_v(&sem_det_val_arene);//éxecuter la tache th_det_val_arene
             }else if(msg.data[0] == CAM_ARENA_CONFIRM){
                 rt_mutex_acquire(&mutex_AreneSaved, TM_INFINITE);
                 AreneSaved=monArene;
@@ -165,6 +181,7 @@ void f_receiveFromMon(void *arg) {
                 modeCamera=CAM_CAPTURE;
             }
             rt_mutex_release(&mutex_modeCamera);
+        }
         }
     } while (err > 0);
 
@@ -202,6 +219,29 @@ void f_openComRobot(void * arg) {
         }
     }
 }
+void f_reset(void * arg) {
+    /* INIT */
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+
+    while (1) {
+#ifdef _WITH_TRACE_
+        printf("%s : Wait sem_Reset\n", info.name);
+#endif
+        rt_sem_p(&sem_Reset, TM_INFINITE);
+        // Rédemarrer le système à l'état initial
+              printf("Le reset a été fait %s\n");
+              rt_mutex_acquire(&mutex_move, TM_INFINITE);
+              move = DMB_STOP_MOVE;
+              rt_mutex_release(&mutex_move);
+              send_command_to_robot(CLOSE_COM_DMB);
+              close_server();
+              close_camera(&rpiCam);
+        
+    }
+}
 
 void f_startRobot(void * arg) {
     int err;
@@ -221,7 +261,7 @@ void f_startRobot(void * arg) {
         printf("%s : sem_startRobot arrived => Start robot\n", info.name);
 #endif
         err = send_command_to_robot(DMB_START_WITHOUT_WD);
-        if (err == 0) {
+        if (err ==0) {
 #ifdef _WITH_TRACE_
             printf("%s : the robot is started\n", info.name);
 #endif
@@ -278,6 +318,7 @@ void f_move(void *arg) {
 void f_niveau_batterie(void *arg) {
     /* INIT */
     int NiveauBatt=0;
+    int err=0;
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
@@ -300,14 +341,16 @@ void f_niveau_batterie(void *arg) {
         if (robotStarted) {
            // rt_mutex_acquire(&mutex_move, TM_INFINITE);
             NiveauBatt=send_command_to_robot(DMB_GET_VBAT);
-            compteur(NiveauBatt);
+            compteur(NiveauBatt);// Vérification l'état de la communication superviseur-robot
             NiveauBatt+=48;
-            send_message_to_monitor("BAT",&NiveauBatt);
-           // rt_mutex_release(&mutex_move);
-            /*MessageToMon msg; 
-            set_msgToMon_header(&msg, HEADER_STM_BAT);
-            set_msgToMon_data(&msg, &NiveauBatt);
-            write_in_queue(&q_messageToMon, msg);*/
+            // Vérification l'état de la communication superviseur-serveur
+            err=send_message_to_monitor("BAT",&NiveauBatt);
+            if(err<0){
+                 printf("La communication Serveur-Superviseur a été perdue (SEND FAIL 2): %s\n", strerror(-err));                   
+                 rt_sem_v(&sem_Reset);                     
+                                 
+            }
+
 /*#ifdef _WITH_TRACE_
             printf("%s: the battery %c was sent\n", info.name, move);
 #endif */           
@@ -319,76 +362,66 @@ void f_niveau_batterie(void *arg) {
 
 void f_startRobotWD(void *arg){
     int err;
-RT_TASK_INFO info;
+    bool WDStarted=false;
+    int compteurWD=0;
+    RT_TASK_INFO info;
 
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
     rt_sem_p(&sem_barrier, TM_INFINITE);
-
+    rt_sem_p(&sem_startRobotWD, TM_INFINITE);
     rt_task_set_periodic(NULL, TM_NOW, 1000000000);
     
     while (1) {
-#ifdef _WITH_TRACE_
-        printf("%s : Wait sem_startRoboWD\n", info.name);
-#endif rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-        
-        
-        
-        if(robotStarted!=1){
-            rt_sem_p(&sem_startRobot, TM_INFINITE);
+     rt_task_wait_period(NULL);
+     rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);     
+      // On verifie si on est dans le pqrtie du code qui est executé pour demarer ou pour envoyer de RELOAD   
+        if(robotStarted!=1 && WDStarted==false){
+            //Code à éxecuter lors de la première éxecution de la tache
+            
     #ifdef _WITH_TRACE_
             printf("%s : sem_startRobotWD arrived => Start robot avec WD\n", info.name);
     #endif
             err = send_command_to_robot(DMB_START_WITH_WD);
-            if (err == 0) {  // s'il y a un erreur
+            printf("\n Whatchdog erreur %d \n",err);
+            if (err == 0) { // s'il n'y a pas d'erreur
+                
     #ifdef _WITH_TRACE_
-                printf("%s : the robot is started\n", info.name);
+                printf("%s : the robot is started with WD\n", info.name);
     #endif
                 robotStarted = 1;
-                MessageToMon msg;
-                set_msgToMon_header(&msg, HEADER_STM_ACK);
-                write_in_queue(&q_messageToMon, msg);
+                WDStarted=true;
+                send_message_to_monitor(HEADER_STM_ACK);
             } else {
                 MessageToMon msg;
                 set_msgToMon_header(&msg, HEADER_STM_NO_ACK);
                 write_in_queue(&q_messageToMon, msg);
             }
-        
-        }
-        else {
+        }else{
+            // Code à éxecuter periodiquement
             err= send_command_to_robot(DMB_RELOAD_WD);
-            rt_mutex_acquire(&mutex_compteur, TM_INFINITE);
-            if(err= ROBOT_TIMED_OUT){  //verifie quelle est le valeur retourne
+            printf("Envoyer reloadWD: %s\n");
+            if(err== ROBOT_TIMED_OUT){  //Vérifier quelle est la valeur retournée
                 if(compteurWD >2){
-                    send_message_to_monitor("LCD","Comm avec Robo est perdu");  
-                    //envoye LOST DMB
+                    send_message_to_monitor("LCD");  
+                    printf("Communication robotwWD-superviseur perdue: %s\n");
+                    //Envoyer message de perte de communication LOST DMB
                     close_communication_robot();
-                    // initialise la communication a etat final ??
-                }
-                else {
+                    // Fermer la communication
+                }else {
                     compteurWD++;
                 }  
             }else {
                 compteurWD=0;   
             }
             
-            rt_mutex_release(&mutex_compteur);
         }
         
-                rt_mutex_release(&mutex_robotStarted);
-        
-        
+    rt_mutex_release(&mutex_robotStarted);
         
     }
 
-
 }
-
-
-
-
-
-
 
 void f_open_camera(void *arg){
     int err;    
@@ -406,10 +439,11 @@ void f_open_camera(void *arg){
 #ifdef _WITH_TRACE_
         printf("%s : sem_openCamera => open camera \n", info.name);
 #endif
+        //Vérifier que la camera a été ouverte correctement
         err = open_camera(&rpiCam);
         if (err == 0) {
 #ifdef _WITH_TRACE_
-            printf("%s : the communication is opened\n", info.name);
+            printf("%s : the camera is opened\n", info.name);
 #endif
             MessageToMon msg;
             set_msgToMon_header(&msg, HEADER_STM_ACK);
@@ -422,14 +456,16 @@ void f_open_camera(void *arg){
         }
     }
 }
+
 void f_capture_compute(void *arg){
     MessageToMon msg;
     Position robotPosition[20];
     int posOK=0;
+    int err=0;
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
-    //rt_sem_p(&sem_barrier, TM_INFINITE);
+    
     rt_sem_p(&sem_capture_compute, TM_INFINITE);
     
     /* PERIODIC START */
@@ -445,6 +481,7 @@ void f_capture_compute(void *arg){
 /*#ifdef _WITH_TRACE_
         printf("%s: Periodic activation\n", info.name);
 #endif*/
+        //Indiquer que l'image est en traitement
         rt_mutex_acquire(&mutex_etatImage, TM_INFINITE);
         etatImage=1;
         rt_mutex_release(&mutex_etatImage); 
@@ -453,14 +490,17 @@ void f_capture_compute(void *arg){
         if(modeCamera==CAM_CAPTURE){            
             get_image(&rpiCam,&imgVideo);
             compress_image(&imgVideo,&compress);
-            send_message_to_monitor("IMG",&compress);
-            /*set_msgToMon_header(&msg, "IMG");
-            set_msgToMon_data(&msg, &compress);
-            write_in_queue(&q_messageToMon, msg);*/
+            err=send_message_to_monitor("IMG",&compress);
+            // Vérification l'état de la communication superviseur-serveur
+            if(err<0){
+                 printf("La communication Serveur-Superviseur a été perdue (SEND FAIL 3): %s\n", strerror(-err));
+                 rt_sem_v(&sem_Reset);                     
+                                     
+            }
          }else if(modeCamera==CAM_COMPUTE_POSITION){
                 get_image(&rpiCam,&imgVideo);
                 rt_mutex_acquire(&mutex_AreneSaved, TM_INFINITE);                                
-                posOK=detect_position(&imgVideo,robotPosition,&monArene);
+                posOK=detect_position(&imgVideo,robotPosition,&AreneSaved);
                 rt_mutex_release(&mutex_AreneSaved);
              if(posOK==0){
                 send_message_to_monitor("POS",&robotPosition[0]);
@@ -469,8 +509,13 @@ void f_capture_compute(void *arg){
                  send_message_to_monitor("POS",&robotPosition[0]);
                  
             }
-             compress_image(&imgVideo,&compress);
-             send_message_to_monitor("IMG",&compress);
+             compress_image(&imgVideo,&compress);            
+             err=send_message_to_monitor("IMG",&compress);
+            // Vérification l'état de la communication superviseur-serveur            
+                if(err<0){
+                    printf("La communication Serveur-Superviseur a été perdue (SEND FAIL 4): %s\n", strerror(-err));
+                    rt_sem_v(&sem_Reset); 
+                     }
          }else if(modeCamera==CAM_IDLE){
              
          }       
@@ -478,7 +523,7 @@ void f_capture_compute(void *arg){
             printf("%s: send images %c was sent\n", info.name, modeCamera);
 #endif   */
         rt_mutex_release(&mutex_modeCamera); 
-        
+    //Indiquer que le traitement d'image a fini    
         rt_mutex_acquire(&mutex_etatImage, TM_INFINITE);
         etatImage=0;
         rt_mutex_release(&mutex_etatImage); 
@@ -487,6 +532,7 @@ void f_capture_compute(void *arg){
 }
 
 void f_det_val_arene(void *arg){
+    int err;
    MessageToMon msg;
     /* INIT */
     RT_TASK_INFO info;
@@ -502,14 +548,14 @@ void f_det_val_arene(void *arg){
 #ifdef _WITH_TRACE_
         printf("%s : sem_openCamera => open camera \n", info.name);
 #endif
+//Vérifier si l'image est en traitement        
        rt_mutex_acquire(&mutex_etatImage, TM_INFINITE);
         if(etatImage==0){
                 get_image(&rpiCam,&imgVideo);
            if(detect_arena(&imgVideo,&monArene)==0){
-                detect_arena(&imgVideo,&monArene);
                 draw_arena(&imgVideo,&imgVideo,&monArene);
                 compress_image(&imgVideo,&compress);
-                send_message_to_monitor("IMG",&compress);
+                err=send_message_to_monitor("IMG",&compress);              
                 set_msgToMon_header(&msg, HEADER_STM_ACK);
                 write_in_queue(&q_messageToMon, msg);
           }else{                
@@ -524,8 +570,6 @@ void f_det_val_arene(void *arg){
 }
     
 }
-
-
 
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;

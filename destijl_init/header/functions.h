@@ -31,6 +31,7 @@
 #include "../../src/message.h"
 
 extern RT_TASK th_server;
+extern RT_TASK th_reset;
 extern RT_TASK th_sendToMon;
 extern RT_TASK th_receiveFromMon;
 extern RT_TASK th_openComRobot;
@@ -45,26 +46,26 @@ extern RT_TASK th_det_val_arene;
 extern RT_MUTEX mutex_robotStarted;
 extern RT_MUTEX mutex_move;
 extern RT_MUTEX mutex_etatComRobot;
-extern RT_MUTEX mutex_compteur;
 extern RT_MUTEX mutex_modeCamera;
 extern RT_MUTEX mutex_monArene;
 extern RT_MUTEX mutex_etatImage;
 extern RT_MUTEX mutex_AreneSaved;
-extern RT_MUTEX mutex_etatCommMoniteur;
+//extern RT_MUTEX mutex_etatCommMoniteur;
 extern RT_MUTEX mutex_compteurVerifierCom;
 
 
 extern RT_SEM sem_barrier;
 extern RT_SEM sem_openComRobot;
 extern RT_SEM sem_serverOk;
+extern RT_SEM sem_Reset;
 extern RT_SEM sem_startRobot;
 extern RT_SEM sem_openCamera;
 extern RT_SEM sem_capture_compute;
 extern RT_SEM sem_det_val_arene;
+extern RT_SEM sem_startRobotWD;
 
 extern RT_QUEUE q_messageToMon;
 
-extern int etatCommMoniteur;
 extern int robotStarted;
 extern int etatImage;
 extern char move;
@@ -89,6 +90,7 @@ extern int PRIORITY_TOPENCAM;
 extern int PRIORITY_TCAPTURE_OU_COMPUTE;
 extern int PRIORITY_TDETECTER_OU_VALIDER;
 extern int PRIORITY_TSTARTROBOTWD;
+extern int PRIORITY_TRESET;
 
 void f_server(void *arg);
 void f_sendToMon(void *arg);
@@ -103,5 +105,6 @@ void f_open_camera(void *arg);
 void f_det_val_arene(void *arg);
 void f_capture_compute(void *arg);
 void compteur(int erreur);
+void f_reset(void *arg);
 #endif /* FUNCTIONS_H */
 
